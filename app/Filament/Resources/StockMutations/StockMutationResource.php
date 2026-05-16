@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class StockMutationResource extends Resource
 {
@@ -29,6 +30,10 @@ class StockMutationResource extends Resource
     {
         return StockMutationsTable::configure($table);
     }
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('product');
+    }
 
     public static function getRelations(): array
     {
@@ -36,6 +41,7 @@ class StockMutationResource extends Resource
             //
         ];
     }
+
 
     public static function getPages(): array
     {

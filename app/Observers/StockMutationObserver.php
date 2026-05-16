@@ -2,7 +2,9 @@
 
 namespace App\Observers;
 
+use App\Models\Product;
 use App\Models\StockMutation;
+use Filament\Notifications\Notification;
 
 class StockMutationObserver
 {
@@ -13,8 +15,7 @@ class StockMutationObserver
     {
         // Take the current stock of the product
         $product = $stockMutation->product;
-        $product->stock += $stockMutation->quantity;
-        $product->save();
+        $this->adjustStock($product, $stockMutation->type,$stockMutation->quantity);
     }
 
     /**
@@ -22,7 +23,19 @@ class StockMutationObserver
      */
     public function updated(StockMutation $stockMutation): void
     {
-        //
+        $oldProduct = $stockMutation->getOriginal('product_id') ? Product::find($stockMutation->getOriginal('product_id')) : null;
+        $oldQty = $stockMutation->getOriginal('quantity');
+        $oldType = $stockMutation->getOriginal('type');
+
+        if ($oldProduct) {
+            $reverseType = ($oldType === 'in') ? 'out' : 'in';
+            $this->adjustStock($oldProduct, $reverseType, $oldQty);
+        }
+
+        $newProduct = $stockMutation->product;
+        if ($newProduct) {
+            $this->adjustStock($newProduct, $stockMutation->type, $stockMutation->quantity);
+        }
     }
 
     /**
@@ -31,21 +44,35 @@ class StockMutationObserver
     public function deleted(StockMutation $stockMutation): void
     {
         //
+        $product = $stockMutation->product;
+
+        if (!$product) return;
+        
+
+        if ($stockMutation->type === 'in') {
+            $product->decrement('stock', $stockMutation->quantity);
+        } elseif ($stockMutation->type === 'out') {
+            $product->increment('stock', $stockMutation->quantity);
+        }
     }
 
-    /**
-     * Handle the StockMutation "restored" event.
-     */
-    public function restored(StockMutation $stockMutation): void
+    private function adjustStock($product, $type, $quantity): void
     {
-        //
+        if ($type === 'in') {
+            $product->increment('stock', $quantity);
+        } else {
+            $product->decrement('stock', $quantity);
+        }
     }
 
-    /**
-     * Handle the StockMutation "force deleted" event.
-     */
-    public function forceDeleted(StockMutation $stockMutation): void
+    protected function checkLowStock($product)
     {
-        //
+        if ($product->stock < 10) {
+            Notification::make()
+                ->title('Stok Produk ' . $product->name . ' Rendah')
+                ->body('Stok produk ' . $product->name . ' saat ini hanya ' . $product->stock . '. Segera lakukan restock!')
+                ->danger()
+                ->send();
+        }
     }
 }
